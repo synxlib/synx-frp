@@ -1,0 +1,42 @@
+<html>
+  <head>
+    <title>Parcel1 Sandbox</title>
+    <meta charset="UTF-8" />
+    <style>
+      .selected {
+        background-color: #4caf50;
+        color: white;
+      }
+
+      .buttons-container {
+        margin: 20px 0;
+      }
+
+      .target-button {
+        margin: 0 10px;
+        padding: 8px 16px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="app">
+      <div class="container">
+        <button id="selector">Select Random Button</button>
+
+        <div class="buttons-container">
+          <button id="button-1" class="target-button">Button 1</button>
+          <button id="button-2" class="target-button">Button 3</button>
+          <button id="button-3" class="target-button">Button 3</button>
+        </div>
+
+        <div class="info">
+          <p>Selected button: <span id="selected-button-id">None</span></p>
+          <p>Click count: <span id="click-count">0</span></p>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/index.ts"></script>
+  </body>
+</html>
