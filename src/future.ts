@@ -1,9 +1,9 @@
-import { Event } from "./event";
+import { InternalReactive, Reactive, ReactiveImpl } from "./reactive";
 
 // Future represents a computation that will be applied to subscribers
 export class Future<A> {
   // The computation function
-  private readonly computation: (handler: (value: A) => void) => () => void;
+  computation: (handler: (value: A) => void) => () => void;
 
   /**
    * Create a new Future with the given computation
@@ -26,12 +26,56 @@ export class Future<A> {
     return new Future<B>((handler) =>
       this.computation((a) => {
         try {
+          console.log("Running future mapper function", a)
           handler(f(a));
         } catch (error) {
           console.error("Error in map function:", error);
         }
       }),
     );
+  }
+
+  chain<B>(f: (a: A) => Future<B>): Future<B> {
+    return new Future<B>((handler) => {
+      // Track inner subscription to be able to clean it up
+      let innerUnsubscribe: (() => void) | null = null;
+      
+      // Subscribe to this future
+      const outerUnsubscribe = this.computation((a) => {
+        try {
+          // Clean up previous inner subscription if it exists
+          if (innerUnsubscribe) {
+            innerUnsubscribe();
+            innerUnsubscribe = null;
+          }
+          
+          // Create new inner future using the received value
+          const innerFuture = f(a);
+          
+          // Subscribe to the inner future
+          innerUnsubscribe = innerFuture.run(handler);
+        } catch (error) {
+          console.error("Error in chain function:", error);
+        }
+      });
+      
+      // Return a function that cleans up both subscriptions
+      return () => {
+        outerUnsubscribe();
+        if (innerUnsubscribe) {
+          innerUnsubscribe();
+        }
+      };
+    });
+  }
+
+  static of<A>(value: A): Future<A> {
+    return new Future<A>((handler) => {
+      // Immediately call the handler with the value
+      handler(value);
+      // Return a no-op cleanup function
+      return () => { /* no-op */ };
+    });
   }
 
   /**
@@ -43,13 +87,22 @@ export class Future<A> {
     });
   }
 
+
   /**
    * Create a future from a reactive value's changes (Only for internal use by Reactive and Event)
    * @internal
    */
   static fromReactive<A>(reactive: InternalReactive<A>): Future<A> {
-    return new Future<A>((handler) =>
-      reactive.subscribeInternal(handler, false),
-    );
+    return new Future<A>((handler) => {
+      handler(reactive.get());
+      return reactive.subscribeInternal(handler, false);
+    });
+  }
+  
+  static reactive<A>(initialValue: Future<A>): Future<InternalReactive<A>> {
+    return initialValue.map((v: A) => {
+      console.log("Creating reactive with initial value", v)
+      return new ReactiveImpl<A>(v);
+    });
   }
 }

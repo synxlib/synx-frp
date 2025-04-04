@@ -1,3 +1,3 @@
 export { Event } from "./event";
 export { Reactive } from "./reactive";
-export { fromDOMEvent } from "./helpers";
+export { fromDOMEvent, interval } from "./helpers";

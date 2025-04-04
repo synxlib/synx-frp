@@ -5,54 +5,26 @@ import { InternalReactive, Reactive, ReactiveImpl } from "./reactive";
  * Public interface for Events
  */
 export interface Event<A> {
-    /**
-     * Subscribe to this event
-     */
     subscribe(handler: (value: A) => void): () => void;
 
-    /**
-     * Map this event
-     */
     map<B>(f: (a: A) => B): Event<B>;
 
-    /**
-     * Create a reactive value from this event
-     */
     stepper(initialValue: A): Reactive<A>;
 
-    /**
-     * Merge this event with another event
-     */
     concat(other: Event<A>): Event<A>;
 
-    /**
-     * Apply a function event to this event
-     */
+    /*
     ap<B>(ef: Event<(a: A) => B>): Event<B>;
 
-    /**
-     * Chain/flatMap this event with a function that returns another event
-     */
     chain<B>(f: (a: A) => Event<B>): Event<B>;
+    */
 
-    /**
-     * Filter this event based on a predicate
-     */
     filter(predicate: (a: A) => boolean): Event<A>;
 
-    /**
-     * Fold/accumulate values from this event
-     */
     fold<B>(initial: B, f: (b: B, a: A) => B): Reactive<B>;
 
-    /**
-     * Combine this event with another event into a paired event
-     */
     zip<B>(other: Event<B>): Event<[A, B]>;
 
-    /**
-     * Clean up resources
-     */
     cleanup(): void;
 }
 
@@ -73,10 +45,7 @@ interface InternalEvent<A> extends Event<A> {
  */
 export class EventImpl<A> implements InternalEvent<A> {
     // The underlying future of values
-    private future: Future<A>;
-
-    // For source events, this reactive handles the subscriber management
-    private sourceReactive?: InternalReactive<A>;
+    future: Future<A>;
 
     // Cached stepper reactive
     private stepperReactive?: Reactive<A>;
@@ -88,11 +57,9 @@ export class EventImpl<A> implements InternalEvent<A> {
     /**
      * Create a new event
      * @param future The future that powers this event
-     * @param sourceReactive Optional reactive value that handles subscribers for source events
      */
-    constructor(future: Future<A>, sourceReactive?: InternalReactive<A>) {
+    constructor(future: Future<A>) {
         this.future = future;
-        this.sourceReactive = sourceReactive;
     }
 
     /**
@@ -123,18 +90,6 @@ export class EventImpl<A> implements InternalEvent<A> {
      */
     getFutureInternal(): Future<A> {
         return this.future;
-    }
-
-    /**
-     * Emit a value to this event (only valid for source events)
-     */
-    emit(value: A): void {
-        if (!this.sourceReactive) {
-            throw new Error("Cannot emit on derived events");
-        }
-
-        console.log(`Emitting value:`, value);
-        this.sourceReactive.updateValueInternal(value);
     }
 
     /**
@@ -204,9 +159,15 @@ export class EventImpl<A> implements InternalEvent<A> {
     }
 
     /**
+     * There are problems with the semantics for Monad and Applicative for Events.
+     */
+
+    /**
      * Apply a function event to this event
      */
+    /*
     ap<B>(ef: Event<(a: A) => B>): Event<B> {
+        // return ef.chain((f) => this.map(f));
         // We need to track the latest values from both events
         let latestFn: ((a: A) => B) | null = null;
         let latestValue: A | null = null;
@@ -215,6 +176,7 @@ export class EventImpl<A> implements InternalEvent<A> {
 
         // Create a future that combines the two events
         const future = new Future<B>((handler) => {
+            if (latestFn != null && latestValue != null) handler(latestFn(latestValue));
             // Subscribe to the function event
             const fnSub = ef.subscribe((fn) => {
                 latestFn = fn;
@@ -254,10 +216,12 @@ export class EventImpl<A> implements InternalEvent<A> {
 
         return new EventImpl<B>(future);
     }
+    */
 
     /**
      * Chain/flatMap this event with a function that returns another event
      */
+    /*
     chain<B>(f: (a: A) => Event<B>): Event<B> {
         // Create a future for the chained event
         const future = new Future<B>((handler) => {
@@ -284,6 +248,10 @@ export class EventImpl<A> implements InternalEvent<A> {
 
                     // Subscribe to inner event
                     currentInnerSub = currentInnerEvent.subscribe(handler);
+                    // const initialInnerValue = currentInnerEvent.last();
+                    // if (initialInnerValue !== undefined) {
+                    //     handler(initialInnerValue);
+                    // }
                 } catch (error) {
                     console.error("Error in chain function:", error);
                 }
@@ -303,6 +271,7 @@ export class EventImpl<A> implements InternalEvent<A> {
 
         return new EventImpl<B>(future);
     }
+    */
 
     /**
      * Filter this event based on a predicate
@@ -411,19 +380,46 @@ export const Event = {
     /**
      * Create an event with an emitter function
      */
-    create<A>(initialValue: A): [Event<A>, (value: A) => void] {
-        // Create a reactive value to store state
-        const reactive = new ReactiveImpl<A>(initialValue);
+    create<A>(): [Event<A>, (value: A) => void] {
+        let reactive: InternalReactive<A> | null = null
+        let initialValue: A | null = null;
+        let didFirstEmit = false;
+        let onFirstEmit: ((v: A) => void)[] = [];
+        const initialEmitValueFuture = new Future<A>((handler) => {
+            console.log("Running computation", initialValue)
+            onFirstEmit.push(handler);
+            return () => {
+            }
+        });
+        const future = Future.reactive<A>(initialEmitValueFuture);
 
-        // Create a future from the reactive
-        const future = Future.fromReactive<A>(reactive);
+        let innerFuture: Future<A> | null = null
 
         // Create the event with both
-        const event = new EventImpl<A>(future, reactive);
+        const event = new EventImpl<A>(future.chain((r) => {
+            if (innerFuture === null) {
+                console.log("Chain callback with new reactive")
+                reactive = r;
+                innerFuture = Future.fromReactive(r);
+                return innerFuture;
+            } else {
+                console.log("Chain callback with existing reactive")
+                return innerFuture;
+            }
+        }));
 
         // Create the emit function that uses the event's internal emit method
         const emit = (value: A): void => {
-            reactive.updateValueInternal(value);
+            console.log("Emit value", value);
+            if (reactive === null) {
+                console.log("Setting initial value", value);
+                initialValue = value;
+                didFirstEmit = true;
+                if (onFirstEmit) onFirstEmit.forEach((handler) => handler(value));
+            } else {
+                console.log("Updating reactive value");
+                reactive.updateValueInternal(value);
+            }
         };
 
         return [event, emit];
@@ -446,9 +442,9 @@ export const Event = {
     /**
      * Join/flatten an event of events
      */
-    join<A>(eventOfEvents: Event<Event<A>>): Event<A> {
-        return eventOfEvents.chain((event) => event);
-    },
+    // join<A>(eventOfEvents: Event<Event<A>>): Event<A> {
+    //     return eventOfEvents.chain((event) => event);
+    // },
 
     /**
      * Combine multiple events into a tuple
@@ -487,4 +483,37 @@ export const Event = {
 
         return result;
     },
+
+    switch<A>(initialEvent: Event<A>, eventOfEvents: Event<Event<A>>): Event<A> {
+        // Create a new event that will emit values from the current source
+        const [resultEvent, emitResult] = Event.create<A>();
+        
+        // Keep track of the current source and its subscription
+        let currentEvent = initialEvent;
+        let currentSubscription = currentEvent.subscribe(emitResult);
+        
+        // Subscribe to the event of events
+        const eventsSubscription = eventOfEvents.subscribe(newEvent => {
+            // Clean up the subscription to the previous event
+            if (currentSubscription) {
+                currentSubscription();
+            }
+            
+            // Update the current event and subscribe to it
+            currentEvent = newEvent;
+            currentSubscription = currentEvent.subscribe(emitResult);
+        });
+        
+        // Enhance the cleanup to handle all subscriptions
+        const originalCleanup = resultEvent.cleanup.bind(resultEvent);
+        (resultEvent as any).cleanup = () => {
+            if (currentSubscription) {
+                currentSubscription();
+            }
+            eventsSubscription();
+            originalCleanup();
+        };
+        
+        return resultEvent;
+    }
 };

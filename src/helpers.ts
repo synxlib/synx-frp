@@ -9,7 +9,7 @@ export function fromDOMEvent<K extends keyof HTMLElementEventMap>(
     element: HTMLElement,
     eventName: K,
 ): Event<HTMLElementEventMap[K]> {
-    const [event, emit] = Event.create<HTMLElementEventMap[K]>(null as any);
+    const [event, emit] = Event.create<HTMLElementEventMap[K]>();
 
     // Create the event handler
     const handler = (e: HTMLElementEventMap[K]) => {
@@ -31,7 +31,7 @@ export function fromDOMEvent<K extends keyof HTMLElementEventMap>(
 
 // Create a timer event that fires periodically
 export function interval(period: number): Event<number> {
-    const [input, emit] = Event.create(0);
+    const [input, emit] = Event.create<number>();
     let count = 0;
     let id: ReturnType<typeof setTimeout> | null = null;
 

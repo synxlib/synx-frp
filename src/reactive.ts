@@ -119,7 +119,7 @@ export class ReactiveImpl<A> implements InternalReactive<A> {
             const future = Future.fromReactive<A>(this);
 
             // Create an event with this future
-            this.changeEvent = new EventImpl<A>(future, this);
+            this.changeEvent = new EventImpl<A>(future);
         }
 
         return this.changeEvent;
@@ -275,7 +275,7 @@ export const Reactive = {
     /**
      * Create a constant reactive value
      */
-    constant<A>(value: A): Reactive<A> {
+    of<A>(value: A): Reactive<A> {
         return new ReactiveImpl<A>(value);
     },
 };
