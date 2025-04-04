@@ -383,12 +383,12 @@ export const Event = {
     create<A>(): [Event<A>, (value: A) => void] {
         let reactive: InternalReactive<A> | null = null
         let initialValue: A | null = null;
-        let didFirstEmit = false;
         let onFirstEmit: ((v: A) => void)[] = [];
         const initialEmitValueFuture = new Future<A>((handler) => {
             console.log("Running computation", initialValue)
             onFirstEmit.push(handler);
             return () => {
+                onFirstEmit = onFirstEmit.filter((h) => h !== handler);
             }
         });
         const future = Future.reactive<A>(initialEmitValueFuture);
@@ -414,7 +414,6 @@ export const Event = {
             if (reactive === null) {
                 console.log("Setting initial value", value);
                 initialValue = value;
-                didFirstEmit = true;
                 if (onFirstEmit) onFirstEmit.forEach((handler) => handler(value));
             } else {
                 console.log("Updating reactive value");
@@ -498,6 +497,8 @@ export const Event = {
             if (currentSubscription) {
                 currentSubscription();
             }
+
+            currentEvent.cleanup();
             
             // Update the current event and subscribe to it
             currentEvent = newEvent;

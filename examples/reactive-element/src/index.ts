@@ -10,13 +10,15 @@ function dynamicEventExample() {
     const buttonIds = ["button-1", "button-2", "button-3"];
 
     // Create a reactive value that contains the currently selected button ID
-    const selectedButtonIdReactive = selectorEvent.map(() => {
-        // Select a random button ID
-        const randomIndex = Math.floor(Math.random() * buttonIds.length);
-        const selectedId = buttonIds[randomIndex];
-        console.log(`Selected button: ${selectedId}`);
-        return selectedId;
-    }).stepper("button-1");
+    const selectedButtonIdReactive = selectorEvent
+        .map(() => {
+            // Select a random button ID
+            const randomIndex = Math.floor(Math.random() * buttonIds.length);
+            const selectedId = buttonIds[randomIndex];
+            console.log(`Selected button: ${selectedId}`);
+            return selectedId;
+        })
+        .stepper("button-1");
 
     // Create a reactive value that holds the selected button element
     const selectedButtonReactive = selectedButtonIdReactive.map((id) => {
@@ -31,7 +33,12 @@ function dynamicEventExample() {
         return element;
     });
 
-    const dynamicClickEvent = Event.switch(selectorEvent, selectorEvent.map(() => fromDOMEvent(selectedButtonReactive.get(), "click")));
+    const dynamicClickEvent = Event.switch(
+        fromDOMEvent(selectedButtonReactive.get(), "click"),
+        selectorEvent.map(() =>
+            fromDOMEvent(selectedButtonReactive.get(), "click")
+        )
+    );
 
     // Count the clicks on the dynamically selected button
     const clickCountReactive = dynamicClickEvent.fold(
