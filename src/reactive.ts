@@ -268,9 +268,6 @@ export class ReactiveImpl<A> implements InternalReactive<A> {
     }
 }
 
-/**
- * Factory functions for creating Reactives
- */
 export const Reactive = {
     /**
      * Create a constant reactive value
@@ -281,5 +278,41 @@ export const Reactive = {
 
     accum<A>(initialValue: A, event: Event<(a: A) => A>): Reactive<A> {
         return Event.accum(initialValue, event).stepper(initialValue);
+    },
+
+    switch<A>(initial: Reactive<A>, event: Event<Reactive<A>>): Reactive<A> {
+        const result = new ReactiveImpl<A>(initial.get());
+
+        let currentReactive = initial;
+        let currentSubscription = currentReactive.subscribe((value) => {
+            result.updateValueInternal(value);
+        });
+
+        // Subscribe to the event to switch to new reactives
+        const eventSubscription = event.subscribe((newReactive) => {
+            if (currentReactive) {
+                currentSubscription();
+            }
+
+            currentReactive = newReactive;
+
+            result.updateValueInternal(newReactive.get());
+
+            currentSubscription = newReactive.subscribe((value) => {
+                result.updateValueInternal(value);
+            });
+        });
+
+        // Store unsubscribe function for cleanup
+        const originalCleanup = result.cleanup.bind(result);
+        result.cleanup = () => {
+            if (currentSubscription) {
+                currentSubscription();
+            }
+            eventSubscription();
+            originalCleanup();
+        };
+
+        return result;
     }
 };

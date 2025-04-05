@@ -13,6 +13,8 @@ export interface Event<A> {
 
     concat(other: Event<A>): Event<A>;
 
+    mergeWith<B, C>(f: (a: A) => C, g: (b: B) => C, other: Event<B>): Event<C>;
+
     /*
     ap<B>(ef: Event<(a: A) => B>): Event<B>;
 
@@ -136,17 +138,25 @@ export class EventImpl<A> implements InternalEvent<A> {
         return reactive;
     }
 
-    /**
-     * Merge this event with another event
-     */
-    concat(other: Event<A>): Event<A> {
-        // Create a future that subscribes to both events
-        const future = new Future<A>((handler) => {
+    mergeWith<B, C>(f: (a: A) => C, g: (b: B) => C, other: Event<B>): Event<C> {
+        const future = new Future<C>((handler) => {
             // Subscribe to this event
-            const sub1 = this.subscribe(handler);
+            const sub1 = this.subscribe((a) => {
+                try {
+                    handler(f(a));
+                } catch (error) {
+                    console.error("Error in mergeWith handler:", error);
+                }
+            });
 
             // Subscribe to the other event
-            const sub2 = other.subscribe(handler);
+            const sub2 = other.subscribe((b) => {
+                try {
+                    handler(g(b));
+                } catch (error) {
+                    console.error("Error in mergeWith handler:", error);
+                }
+            });
 
             // Return a function that unsubscribes from both
             return () => {
@@ -154,12 +164,19 @@ export class EventImpl<A> implements InternalEvent<A> {
                 sub2();
             };
         });
+        return new EventImpl<C>(future);
+    }
 
-        return new EventImpl<A>(future);
+    concat(other: Event<A>): Event<A> {
+        return this.mergeWith((a) => a, (b) => b, other);
     }
 
     apply<B>(rf: Reactive<(a: A) => B>): Event<B> {
         return this.map((a) => rf.get()(a));
+    }
+
+    tag<B>(r: Reactive<B>): Event<B> {
+        return this.map(() => r.get())
     }
 
     /**
@@ -297,6 +314,14 @@ export class EventImpl<A> implements InternalEvent<A> {
         });
 
         return new EventImpl<A>(future);
+    }
+
+    filterApply(predicate: Reactive<(a: A) => boolean>): Event<A> {
+        return this.filter((a) => predicate.get()(a));
+    }
+
+    when(predicate: Reactive<(a: A) => boolean>): Event<A> {
+        return this.filter((a) => predicate.get()(a));
     }
 
     /**
@@ -528,6 +553,12 @@ export const Event = {
             state = f(state);
             return state;
         })
+    },
+
+    unions<A>(efs: Event<(a: A) => A>[]): Event<(a: A) => A> {
+        return efs.reduce((acc, ef) => {
+            return acc.mergeWith((a) => a, (a) => a, ef);
+        }, Event.never<(a: A) => A>());
     }
 
 };
