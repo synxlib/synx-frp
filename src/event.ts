@@ -158,6 +158,10 @@ export class EventImpl<A> implements InternalEvent<A> {
         return new EventImpl<A>(future);
     }
 
+    apply<B>(rf: Reactive<(a: A) => B>): Event<B> {
+        return this.map((a) => rf.get()(a));
+    }
+
     /**
      * There are problems with the semantics for Monad and Applicative for Events.
      */
@@ -516,5 +520,14 @@ export const Event = {
         };
         
         return resultEvent;
+    },
+
+    accum<A>(initial: A, ef: Event<(a: A) => A>): Event<A> {
+        let state = initial;
+        return ef.map(f => {
+            state = f(state);
+            return state;
+        })
     }
+
 };

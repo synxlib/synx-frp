@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Event, EventImpl } from "./event";
+import { Reactive } from "./reactive";
 
 describe("Event", () => {
     // Helper function to create an event and trigger it with a value
@@ -199,6 +200,38 @@ describe("Event", () => {
                 event.cleanup();
                 mappedEvent.cleanup();
             });
+        });
+    });
+
+    describe("Event apply function", () => {
+        it("should apply reactive function to the event", () => {
+            const reactiveFn = Reactive.of((x: number) => x * 2);
+            const [event, emit] = createTestEvent<number>();
+
+            const output = collectValues(event.apply(reactiveFn));
+
+            emit(2);
+            emit(3);
+            emit(4);
+
+            expect(output.values).toEqual([4, 6, 8]);
+        });
+
+        it("should apply updated function to the event", () => {
+            const [event, emit] = createTestEvent<number>();
+            const [multiplier, emitMultiplier] = createTestEvent<number>();
+
+            const reactiveFn = multiplier.stepper(2).map((m) => (x: number) => x * m);
+
+            const output = collectValues(event.apply(reactiveFn));
+
+            emit(2);
+            emitMultiplier(3)
+            emit(3);
+            emitMultiplier(4)
+            emit(4);
+
+            expect(output.values).toEqual([4, 9, 16]);
         });
     });
 

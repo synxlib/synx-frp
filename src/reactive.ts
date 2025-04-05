@@ -278,4 +278,8 @@ export const Reactive = {
     of<A>(value: A): Reactive<A> {
         return new ReactiveImpl<A>(value);
     },
+
+    accum<A>(initialValue: A, event: Event<(a: A) => A>): Reactive<A> {
+        return Event.accum(initialValue, event).stepper(initialValue);
+    }
 };
